@@ -1,0 +1,77 @@
+library(tidyverse)
+library(dplyr)
+
+nba_pbp <- read.csv("nba_pbp.csv")
+
+View(nba_pbp)
+
+test <- nba_pbp %>% 
+  filter(numberEventMessageType == 1)
+
+View(test)
+
+
+#numberEventMessageType == 1 means made shot, numberEventActionType == 1 means 3 pointer
+
+#points per game
+#something like group by game_id, group by player/playerID, find value of shot from play description, sum up points for each game, add
+#up points and games, and then divide
+
+#make sure there's a play description
+ppg <- nba_pbp %>% 
+  group_by(idGame, idPlayerNBA1, namePlayer1) %>% 
+  mutate(play_description = if_else(!is.na(descriptionPlayHome), descriptionPlayHome, descriptionPlayVisitor)) %>% 
+  filter(!is.na(play_description))
+
+View(ppg)
+
+#select stuff i want
+ppg_narrow <- ppg %>% 
+  select(idGame, idPlayerNBA1, namePlayer1, numberEventMessageType, numberEventActionType, play_description)
+
+#filter for made shots or fts
+ppg_narrow <- ppg_narrow %>% 
+  filter(numberEventMessageType <= 3)
+
+ppg_narrow <- ppg_narrow %>% 
+  filter(numberEventMessageType != 2)
+
+#filter out miss free throws
+ppg_narrow <- ppg_narrow %>% 
+  filter(!str_detect(play_description, "MISS"))
+
+View(ppg_narrow)
+
+#grab final made shot for each player 
+ppg_narrow <- ppg_narrow %>% 
+  group_by(idGame, idPlayerNBA1, namePlayer1) %>% 
+  arrange(idGame, namePlayer1) %>% 
+  summarise_all(last)
+
+#extract info between ()
+ppg_mutate <- ppg_narrow %>% 
+  mutate(points = str_extract(play_description, "\\([^()]+\\)"))
+
+#extract number
+ppg_mutate <- ppg_mutate %>% 
+  mutate(points_act = parse_number(points))
+
+#summary df
+ppg_summary <- ppg_mutate %>% 
+  group_by(idGame, idPlayerNBA1, namePlayer1) %>% 
+  summarise(game_points = sum(points_act))
+
+View(ppg_summary)
+
+#find total points and games played
+ppg_final <- ppg_summary %>% 
+  group_by(idPlayerNBA1, namePlayer1) %>% 
+  summarise(total_points = sum(game_points), games_played = n())
+
+#find ppg, finished
+ppg_final <- ppg_final %>% 
+  arrange(idPlayerNBA1, namePlayer1) %>% 
+  summarise_all(last) %>% 
+  mutate(ppg = total_points/games_played)
+
+write.csv(ppg_final, file = "sq_1.csv")
