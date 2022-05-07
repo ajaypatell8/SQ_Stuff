@@ -1,0 +1,85 @@
+View(nba_pbp)
+
+#get one common play description
+nba_pbp <- nba_pbp %>% 
+  mutate(play_description = if_else(!is.na(descriptionPlayHome), descriptionPlayHome, descriptionPlayVisitor)) 
+  
+pbp_small <- nba_pbp %>% 
+  select(idGame, namePlayer1, namePlayer2, play_description, timeStringWC, timeQuarter, timeRemaining, minuteGame, minuteRemainingQuarter,
+         secondsRemainingQuarter)
+
+View(pbp_small)
+
+#get first names
+pbp_small <- pbp_small %>% 
+  mutate(first_name1 = word(namePlayer1, 1),
+         first_name2 = word(namePlayer2, 1))
+
+#try at getting time spent on court
+toc <- pbp_small %>% 
+  group_by(idGame, namePlayer1) %>% 
+  arrange(idGame, namePlayer1) %>% 
+  mutate(time_on_court = if_else(str_detect(play_description, "SUB"), 0, -(timeRemaining - lag(timeRemaining))))
+           
+           
+toc <- toc %>% 
+  filter(!is.na(time_on_court), !is.na(first_name1))
+
+View(toc)
+
+#sum up for total minutes
+final <- toc %>% 
+  group_by(first_name1) %>% 
+  summarise(minutes = sum(time_on_court))
+
+#last names
+pbp_last <- nba_pbp %>% 
+  select(idGame, namePlayer1, namePlayer2, play_description, timeStringWC, timeQuarter, timeRemaining, minuteGame, minuteRemainingQuarter,
+         secondsRemainingQuarter)
+
+pbp_last <- pbp_last %>% 
+  mutate(last_name1 = word(namePlayer1, 2),
+         last_name2 = word(namePlayer2, 2))
+
+View(pbp_last)
+
+toc2 <- pbp_last %>% 
+  group_by(idGame, namePlayer1) %>% 
+  arrange(idGame, namePlayer1) %>% 
+  mutate(time_on_court = if_else(str_detect(play_description, "SUB"), 0, -(timeRemaining - lag(timeRemaining))))
+
+
+toc2 <- toc2 %>% 
+  filter(!is.na(time_on_court), !is.na(last_name1))
+
+#sum up for total minutes
+final2 <- toc2 %>% 
+  group_by(last_name1) %>% 
+  summarise(minutes = sum(time_on_court))
+
+View(final2)
+
+
+
+#part 3, which first names missed the most free throws in the "clutch" (<2 minutes in 4th quarter or ot)
+
+View(nba_pbp)
+
+#filter to only <2 min in 4th quarter or ot and get misses only
+nba_clutch <- nba_pbp %>% 
+  filter(numberPeriod >= 4, minuteRemainingQuarter <= 2, str_detect(play_description, "MISS")) %>% 
+  #filter again for only missed free throws
+  filter(str_detect(play_description, "Free Throw"))
+
+View(nba_clutch)
+
+#get first name
+nba_clutch <- nba_clutch %>% 
+  mutate(first_name = word(namePlayer1, 1))
+
+#find count of missed fts
+missed_fts <- nba_clutch %>% 
+  group_by(first_name) %>% 
+  summarise(missed_clutch_fts = n())
+
+View(missed_fts)
