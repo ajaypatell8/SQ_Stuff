@@ -1,0 +1,81 @@
+View(nba_pbp)
+
+#filter for made shots, make one variable for play_description, and filter for assisted plays
+assisted_shots <- nba_pbp %>% 
+  filter(numberEventMessageType == 1) %>% 
+  mutate(play_description = if_else(!is.na(descriptionPlayHome), descriptionPlayHome, descriptionPlayVisitor)) %>% 
+  filter(str_detect(play_description, "AST"))
+
+View(assisted_shots)
+
+#select variables to work with
+assists_narrow <- assisted_shots %>% 
+  select(idGame, idPlayerNBA1, namePlayer1, idPlayerNBA2, namePlayer2, numberEventMessageType, numberEventActionType, play_description)
+
+View(assists_narrow)
+
+#rename variables 
+assists_narrow <- rename(assists_narrow, shotPlayerID = idPlayerNBA1)
+assists_narrow <- rename(assists_narrow, shotPlayerName = namePlayer1)
+assists_narrow <- rename(assists_narrow, assistPlayerID = idPlayerNBA2)
+assists_narrow <- rename(assists_narrow, assistPlayerName = namePlayer2)
+
+#focus on a specific player, rj barrett
+assists_rj <- assists_narrow %>% 
+  filter(shotPlayerName == "RJ Barrett" | assistPlayerName == "RJ Barrett")
+
+View(assists_rj)
+
+#get assist counts
+assists_rj_grouped <- assists_rj %>% 
+  group_by(shotPlayerName, assistPlayerName) %>% 
+  summarise(assisted_makes = n())
+
+View(assists_rj_grouped)
+
+#add in nyk column for data viz
+
+assists_rj_grouped <- assists_rj_grouped %>% 
+  mutate(team = "New York Knicks")
+
+#get nyk colors for data viz
+teamcolors <- teamcolors::teamcolors
+
+nba_teamcolors <- teamcolors %>% 
+  filter(league == "nba")
+
+#join datasets for one to graph with
+assists_graph <- left_join(assists_rj_grouped, nba_teamcolors, by = c("team" = "name"))
+
+View(assists_graph)
+
+#split into two dfs, one with rj making the shot, one with rj assisting
+rj_made <- assists_graph %>% 
+  filter(shotPlayerName == "RJ Barrett")
+
+rj_assist <- assists_graph %>% 
+  filter(assistPlayerName == "RJ Barrett")
+
+#graphs
+ggplot(rj_made, aes(x = reorder(assistPlayerName, -assisted_makes), y = assisted_makes)) +
+  geom_col(color = rj_made$primary, fill = rj_made$secondary) +
+  labs(
+    title = "Who Assisted RJ Barrett The Most Last Year?",
+    caption = "Data: @ShotQuality | @ajaypatell8",
+    y = "Assists",
+    x = "Name"
+  ) +
+  theme_ajay() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5))
+
+
+ggplot(rj_assist, aes(x = reorder(shotPlayerName, -assisted_makes), y = assisted_makes)) +
+  geom_col(color = rj_assist$primary, fill = rj_assist$secondary) +
+  labs(
+    title = "Who Did RJ Barrett Assist The Most Last Year?",
+    caption = "Data: @ShotQuality | @ajaypatell8",
+    y = "Assists",
+    x = "Name"
+  ) +
+  theme_ajay() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5))
